@@ -1,0 +1,54 @@
+{
+    "variables": {
+        "user": "vagrant",
+        "password": "vagrant",
+        "disk_size": 100000,
+        "domain": ""
+    },
+
+    "builders":
+    [
+        {
+            "name": "mptcpbox",
+
+            "type": "virtualbox-ovf",
+	    "source_path": "../livework/image.ova",
+	    "guest_additions_mode" : "disable",
+	    "headless" : "true",
+            "ssh_username": "vagrant",
+            "ssh_password": "vagrant",
+            "shutdown_command": "echo '{{user `password`}}'|sudo -S shutdown -h now"
+        }
+    ],
+
+    "provisioners": [
+        {
+            "type": "shell",
+            "execute_command": "echo '{{user `password`}}' | {{.Vars}} sudo -E -S bash '{{.Path}}'",
+            "scripts": [
+                "scripts/update.sh",
+                "scripts/packages.sh"
+            ]
+        },
+        {
+            "type": "shell",
+	    "pause_before": "15s",
+            "execute_command": "echo '{{user `password`}}' | {{.Vars}} sudo -E -S bash '{{.Path}}'",
+            "scripts": [
+                "scripts/vagrant.sh",
+                "scripts/cleanup.sh"
+            ]
+        }
+
+
+    ],
+
+    "post-processors": [
+        {
+            "keep_input_artifact": false,
+            "output": "box/mptcp.box",
+            "type": "vagrant"
+        }
+    ]
+ 
+}

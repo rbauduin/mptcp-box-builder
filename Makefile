@@ -1,0 +1,4 @@
+
+
+default:
+	./run.sh
