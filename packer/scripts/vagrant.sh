@@ -1,4 +1,5 @@
-#!/bin/sh
+#!/bin/bash
+set -eux 
 
 # Store build time
 date > /etc/vagrant_box_build_time

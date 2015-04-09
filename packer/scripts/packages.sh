@@ -1,3 +1,5 @@
+#!/bin/bash
+set -eux 
 PACKAGES="
 acpid
 apt-file
@@ -20,4 +22,4 @@ unzip
 vim-nox
 "
 aptitude -y install --without-recommends $PACKAGES
-reboot
+#reboot

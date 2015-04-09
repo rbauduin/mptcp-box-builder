@@ -1,6 +1,4 @@
 #!/bin/bash
-sudo apt-get -y install build-essential libconfig-dev uuid-dev libc-ares-dev libcurl4-openssl-dev git
-cd /usr/local/mbdetect
-sudo git pull
-sudo make client
 
+curl http://www.multipath-tcp.org/mbdetect/client > /usr/local/bin/client
+chmod +x /usr/local/bin/client

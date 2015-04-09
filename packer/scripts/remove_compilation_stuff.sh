@@ -1,3 +1,5 @@
+#!/bin/bash
+set -eux 
 PACKAGES="
 cpp
 cpp-4.6

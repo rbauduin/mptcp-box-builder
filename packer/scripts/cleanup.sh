@@ -1,4 +1,5 @@
-#!/bin/bash -eux
+#!/bin/bash
+set -eux
 
 # From https://github.com/box-cutter/debian-vm/blob/master/script/cleanup.sh
 
