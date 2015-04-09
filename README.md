@@ -21,6 +21,31 @@ Be sure to have packer executables in you path.
 Running
 =======
 
+Boxes are built in 2 steps:
+
+* build base system with dbootstrap, put it in a virtualbox, and export it as an appliance (.ova)
+* use packer to build a vagrant box from the ova
+
+The ova file generated at the first step can be reused to build multiple boxes.
+
+To generate the .ova, just run 
+
+    make ova
+
+Once you have the ova, you can use it to build vagrant boxes thanks to packer.
+
+Two example packer config files are available in the packer directory:
+
+* debian.json will build a base debian box with an mptcp kernel
+* mbdetect.json will build a box running mbdetect tests (https://github.com/rbauduin/mbdetect)
+
+
+You can run the script pack-box.sh to build the box with the config file of your choice, eg:
+
+    ./pack-box.sh debian.json
+
 Build your base vagrant box with mptcp kernel by running
-  make
-Find your box at packer/box/mptcp.box
+
+    make
+
+Find your box in packer/box/mptcp.box
