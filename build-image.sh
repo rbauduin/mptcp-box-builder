@@ -1,10 +1,43 @@
 #!/bin/bash
 
+
+help() {
+	echo "$(basename $0) [--no-debootstrap]"
+	echo "--no-debootstrap : do not re-run debootstrap"
+	echo "works with packer 0.7.5"
+}
+
+DO_DEBOOTSTRAP="YES"
+
+
 set -eux
+while [[ $# -gt 0 ]] ; do
+	echo $*
+	echo "^^"
+	case $1 in
+		--help)
+			help
+			exit
+			;;
+		--no-debootstrap)
+			DO_DEBOOTSTRAP="NO"
+			shift
+			;;
+		*)
+			break
+			;;
+	esac
+done
+
+
+
+
+
 
 mkdir -p livework 
 cd livework
-sudo debootstrap --arch=amd64 wheezy chroot http://127.0.0.1:3142/ftp.be.debian.org/debian/
+
+[[ $DO_DEBOOTSTRAP == "YES" ]] && sudo debootstrap --arch=amd64 jessie chroot http://127.0.0.1:3142/ftp.be.debian.org/debian/
 
 sudo mount none -t proc chroot/proc/
 sudo mount none -t sysfs chroot/sys/
@@ -22,16 +55,16 @@ export PS1="\e[01;31m(live):\W \$ \e[00m"
 
 echo "Acquire::http { Proxy \"http://localhost:3142\"; };"> /etc/apt/apt.conf.d/80-proxy
 
-apt-get install -y --force-yes dialog dbus initramfs-tools
+apt-get install -y --force-yes dialog dbus initramfs-tools aptitude
 dbus-uuidgen > /var/lib/dbus/machine-id
 wget -q -O - http://multipath-tcp.org/mptcp.gpg.key | apt-key add -
-echo "deb http://multipath-tcp.org/repos/apt/debian wheezy main" > /etc/apt/sources.list.d/mptcp.list
+echo "deb http://multipath-tcp.org/repos/apt/debian jessie main" > /etc/apt/sources.list.d/mptcp.list
 
 apt-get update
 apt-get install -y --force-yes linux-mptcp iproute --no-install-recommends sudo openssh-server
 
 
-mkinitramfs -o /boot/initrd-3.14.33.wheezymptcp 3.14.33.wheezymptcp
+mkinitramfs -o /boot/initrd-3.14.33.jessiemptcp 3.14.33.jessiemptcp
 sed -i -e "s+127.0.0.1:3142/++" /etc/apt/sources.list
 rm /etc/apt/apt.conf.d/80-proxy
 apt-get update
@@ -57,7 +90,7 @@ chmod +x chroot/tmp/script1.sh
 LC_ALL=C sudo chroot chroot /tmp/script1.sh
 
 
-
+sudo chroot chroot /etc/init.d/dbus stop
 sudo umount chroot/proc chroot/sys chroot/dev/pts
 
 qemu-img create -f raw image.raw 3G
@@ -68,59 +101,34 @@ EOF
 
 
 sudo kpartx -av image.raw
-base_p1=/dev/mapper/$(sudo kpartx -l image.raw |head -n 1 | awk '{print $1}')
+p1=/dev/mapper/$(sudo kpartx -l image.raw |head -n 1 | awk '{print $1}')
 p2=/dev/mapper/$(sudo kpartx -l image.raw |tail -n 1 | awk '{print $1}')
 
 
-[[ -b $base_p1 ]] && [[ $base_p1 == *"loop"* ]] && mkfs.ext3 $base_p1
+[[ -b $p1 ]] && [[ $p1 == *"loop"* ]] && mkfs.ext3 $p1
 [[ -b $p2 ]] && [[ $p2 == *"loop"* ]] && mkswap $p2
 
 sudo mkdir -p /mnt/vbox/p1
 
-p1=$(sudo losetup -f --show $base_p1)
+##p1=$(sudo losetup -f --show $base_p1)
 
 sudo mount $p1 /mnt/vbox/p1
 
 sudo rsync -aXH chroot/ /mnt/vbox/p1/
 
-#sudo mount --bind /proc/ /mnt/vbox/p1/proc
-#sudo mount --bind /sys/ /mnt/vbox/p1/sys
-#sudo mount --bind /dev /mnt/vbox/p1/dev
-#sudo mount --bind /dev/pts/ /mnt/vbox/p1/dev/pts
-
-
-###############################################
-## start of debug code
-## continue here
-#cd livework 
-#cp image.raw.ori image.raw
-#
-#sudo kpartx -av image.raw
-#base_p1=/dev/mapper/$(sudo kpartx -l image.raw |head -n 1 | awk '{print $1}')
-#p2=/dev/mapper/$(sudo kpartx -l image.raw |tail -n 1 | awk '{print $1}')
-#p1=$(sudo losetup -f --show $base_p1)
-#sudo mount $p1 /mnt/vbox/p1
-#root_part=$(sudo blkid -s UUID -o value /dev/loop1)
-#
-## end of debug code
-################################################
-
-
 # umount/remount needed for grub to install correctly....
-# umount
 sudo umount /mnt/vbox/p1
-sudo losetup -d /dev/loop1
+sleep 1
 sudo kpartx -d image.raw
 # remount
 sudo kpartx -av image.raw
-base_p1=/dev/mapper/$(sudo kpartx -l image.raw |head -n 1 | awk '{print $1}')
+p1=/dev/mapper/$(sudo kpartx -l image.raw |head -n 1 | awk '{print $1}')
 p2=/dev/mapper/$(sudo kpartx -l image.raw |tail -n 1 | awk '{print $1}')
-p1=$(sudo losetup -f --show $base_p1)
 sudo mount $p1 /mnt/vbox/p1
 
 # extract the root partition's uuid out of the chroot
 # and use it to generate script2.sh
-root_part=$(sudo blkid -s UUID -o value /dev/loop1)
+root_part=$(sudo blkid -s UUID -o value $p1)
 
 cat <<END_OF_SCRIPT >/mnt/vbox/p1/tmp/script2.sh
 #!/bin/bash
@@ -138,13 +146,12 @@ cat << ! | debconf-set-selections -v
 grub2   grub2/linux_cmdline                select   
 grub2   grub2/linux_cmdline_default        select   
 grub-pc grub-pc/install_devices_empty      boolean true
-grub-pc grub-pc/install_devices            select   
+grub-pc grub-pc/install_devices            select  /dev/loop0 
 !
 
 apt-get install -y --force-yes grub2
 cat > /boot/grub/device.map <<EOF
 (hd0)   /dev/loop0
-(hd0,1) /dev/loop1
 EOF
 
 update-grub
@@ -153,27 +160,21 @@ sed -i -e '/set root=(loop1)/d'  /boot/grub/grub.cfg
 sed -i -e '/loopback loop1 \/mapper\/loop0p1/d'  /boot/grub/grub.cfg
 sed -i -e "/loop1/d" /boot/grub/grub.cfg
 
+grub-install /dev/loop0
 
-
-
+echo "UUID=$root_part / ext3 defaults 0 1" > /etc/fstab
 
 umount /proc /sys
-
-grub-install /dev/loop0
 END_OF_SCRIPT
 chmod +x /mnt/vbox/p1/tmp/script2.sh
 
-#sudo mount --bind /dev /mnt/vbox/p1/dev
+sudo mount --bind /dev /mnt/vbox/p1/dev
 LC_ALL=C sudo chroot /mnt/vbox/p1/ /tmp/script2.sh
-#sudo umount /mnt/vbox/p1/dev
+sudo umount /mnt/vbox/p1/dev
+sleep 1
 
-
-#sudo grub-install --no-floppy --grub-mkdevicemap=/mnt/vbox/p1/boot/grub/device.map --root-directory=/mnt/vbox/p1 /dev/loop0
-
-#sudo umount /mnt/vbox/p1/sys /mnt/vbox/p1/proc /mnt/vbox/p1/dev/pts /mnt/vbox/p1/dev 
 sudo umount /mnt/vbox/p1
-#sudo losetup -d $p1
-sudo losetup -d /dev/loop1
+sleep 1
 sudo kpartx -d image.raw
 
 
