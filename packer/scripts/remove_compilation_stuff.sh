@@ -31,7 +31,6 @@ libconfig-file-perl
 libdrm-intel1
 libdrm2
 libexpat1
-libevent-2.0-5
 libffi5
 libfontenc1
 libgc1c2

@@ -40,6 +40,7 @@
                 "scripts/update.sh",
                 "scripts/packages.sh",
                 "scripts/install_mbdetect.sh",
+		"scripts/setup_tcpdump.sh",
                 "scripts/remove_compilation_stuff.sh",
                 "scripts/vagrant.sh",
                 "scripts/cleanup.sh"
