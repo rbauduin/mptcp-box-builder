@@ -11,7 +11,7 @@ You need to have sudo access to run these script.
 
 The scripts require apt-cacher-ng running on you machine, and debootstrap:
 
-    sudo apt-get install apt-cacher-ng debootstrap
+    sudo apt-get install apt-cacher-ng debootstrap qemu-utils kpartx
 
 If this commands executes successfully, it probably means you have sudo setup correctly.
 
@@ -30,7 +30,7 @@ The ova file generated at the first step can be reused to build multiple boxes.
 
 To generate the .ova, just run 
 
-    make ova
+    ./build-image.sh
 
 Once you have the ova, you can use it to build vagrant boxes thanks to packer.
 
@@ -46,6 +46,6 @@ You can run the script pack-box.sh to build the box with the config file of your
 
 Build your base vagrant box with mptcp kernel by running
 
-    make
+    ./run.sh
 
 Find your box in packer/box/mptcp.box

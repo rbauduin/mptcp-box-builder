@@ -1,5 +1,6 @@
 #!/bin/bash
 
+set -eu
 
 help() {
 	echo "$(basename $0) [--no-debootstrap]"
@@ -7,10 +8,21 @@ help() {
 	echo "works with packer 0.7.5"
 }
 
+
+try_mount() {
+	device=$1
+	dir=$2
+	num=${3:-3}
+	i=0
+	while [[ $i -lt $num ]] && ! sudo mount $device $dir ; do
+		i=$((i+1))
+		sleep 1
+	done
+}
+
 DO_DEBOOTSTRAP="YES"
 
 
-set -eux
 while [[ $# -gt 0 ]] ; do
 	echo $*
 	echo "^^"
@@ -105,26 +117,28 @@ p1=/dev/mapper/$(sudo kpartx -l image.raw |head -n 1 | awk '{print $1}')
 p2=/dev/mapper/$(sudo kpartx -l image.raw |tail -n 1 | awk '{print $1}')
 
 
-[[ -b $p1 ]] && [[ $p1 == *"loop"* ]] && mkfs.ext3 $p1
-[[ -b $p2 ]] && [[ $p2 == *"loop"* ]] && mkswap $p2
+[[ -b $p1 ]] && [[ $p1 == *"loop"* ]] && sudo mkfs.ext3 $p1
+[[ -b $p2 ]] && [[ $p2 == *"loop"* ]] && sudo mkswap $p2
 
 sudo mkdir -p /mnt/vbox/p1
 
 ##p1=$(sudo losetup -f --show $base_p1)
 
-sudo mount $p1 /mnt/vbox/p1
+try_mount $p1 /mnt/vbox/p1
+
 
 sudo rsync -aXH chroot/ /mnt/vbox/p1/
 
 # umount/remount needed for grub to install correctly....
 sudo umount /mnt/vbox/p1
-sleep 1
+sleep 2
 sudo kpartx -d image.raw
 # remount
 sudo kpartx -av image.raw
 p1=/dev/mapper/$(sudo kpartx -l image.raw |head -n 1 | awk '{print $1}')
 p2=/dev/mapper/$(sudo kpartx -l image.raw |tail -n 1 | awk '{print $1}')
-sudo mount $p1 /mnt/vbox/p1
+try_mount $p1 /mnt/vbox/p1
+sudo mount /dev /mnt/vbox/p1/dev --bind
 
 # extract the root partition's uuid out of the chroot
 # and use it to generate script2.sh
@@ -149,7 +163,7 @@ grub-pc grub-pc/install_devices_empty      boolean true
 grub-pc grub-pc/install_devices            select  /dev/loop0 
 !
 
-apt-get install -y --force-yes grub2
+DEBIAN_FRONTEND=noninteractive apt-get install -y --force-yes grub2
 cat > /boot/grub/device.map <<EOF
 (hd0)   /dev/loop0
 EOF
@@ -164,13 +178,11 @@ grub-install /dev/loop0
 
 echo "UUID=$root_part / ext3 defaults 0 1" > /etc/fstab
 
-umount /proc /sys
+umount /proc /sys /dev
 END_OF_SCRIPT
 chmod +x /mnt/vbox/p1/tmp/script2.sh
 
-sudo mount --bind /dev /mnt/vbox/p1/dev
 LC_ALL=C sudo chroot /mnt/vbox/p1/ /tmp/script2.sh
-sudo umount /mnt/vbox/p1/dev
 sleep 1
 
 sudo umount /mnt/vbox/p1
