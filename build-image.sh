@@ -12,7 +12,7 @@ help() {
 try_mount() {
 	device=$1
 	dir=$2
-	num=${3:-3}
+	num=${3:-5}
 	i=0
 	while [[ $i -lt $num ]] && ! sudo mount $device $dir ; do
 		i=$((i+1))
@@ -24,8 +24,6 @@ DO_DEBOOTSTRAP="YES"
 
 
 while [[ $# -gt 0 ]] ; do
-	echo $*
-	echo "^^"
 	case $1 in
 		--help)
 			help
@@ -117,6 +115,15 @@ p1=/dev/mapper/$(sudo kpartx -l image.raw |head -n 1 | awk '{print $1}')
 p2=/dev/mapper/$(sudo kpartx -l image.raw |tail -n 1 | awk '{print $1}')
 
 
+# BUG : sometimes it is not a block??
+echo "waiting for $p1 to be available"
+while [[ ! -b $p1 ]]; do
+  printf "."
+  sleep 1
+done
+echo "$p1 is now available"
+  
+
 [[ -b $p1 ]] && [[ $p1 == *"loop"* ]] && sudo mkfs.ext3 $p1
 [[ -b $p2 ]] && [[ $p2 == *"loop"* ]] && sudo mkswap $p2
 
@@ -137,6 +144,8 @@ sudo kpartx -d image.raw
 sudo kpartx -av image.raw
 p1=/dev/mapper/$(sudo kpartx -l image.raw |head -n 1 | awk '{print $1}')
 p2=/dev/mapper/$(sudo kpartx -l image.raw |tail -n 1 | awk '{print $1}')
+grub_device=$(sudo kpartx -l image.raw |head -n 1 | awk '{print $5}')
+
 try_mount $p1 /mnt/vbox/p1
 sudo mount /dev /mnt/vbox/p1/dev --bind
 
@@ -160,21 +169,22 @@ cat << ! | debconf-set-selections -v
 grub2   grub2/linux_cmdline                select   
 grub2   grub2/linux_cmdline_default        select   
 grub-pc grub-pc/install_devices_empty      boolean true
-grub-pc grub-pc/install_devices            select  /dev/loop0 
+grub-pc grub-pc/install_devices            select  $grub_device
 !
 
 DEBIAN_FRONTEND=noninteractive apt-get install -y --force-yes grub2
 cat > /boot/grub/device.map <<EOF
-(hd0)   /dev/loop0
+(hd0)   $grub_device
 EOF
 
 update-grub
+
 sed -i -e "s+root=/dev/mapper/loop0p1+root=UUID=$root_part+g" /boot/grub/grub.cfg 
 sed -i -e '/set root=(loop1)/d'  /boot/grub/grub.cfg
 sed -i -e '/loopback loop1 \/mapper\/loop0p1/d'  /boot/grub/grub.cfg
 sed -i -e "/loop1/d" /boot/grub/grub.cfg
 
-grub-install /dev/loop0
+grub-install $grub_device
 
 echo "UUID=$root_part / ext3 defaults 0 1" > /etc/fstab
 
@@ -199,6 +209,7 @@ qemu-img convert -f raw -O vdi image.raw image.vdi
 VBoxManage createvm --name "boxcreation" --register
 VBoxManage modifyvm "boxcreation" --memory 512 --acpi on --boot1 dvd
 VBoxManage modifyvm "boxcreation" --nic1 nat # --bridgeadapter1 eth0
+VBoxManage modifyvm "boxcreation" --cableconnected1 on
 #VBoxManage modifyvm "boxcreation" --macaddress1 XXXXXXXXXXXX
 VBoxManage modifyvm "boxcreation" --ostype Debian_64
 VBoxManage storagectl "boxcreation" --name "IDE Controller" --add ide
